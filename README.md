@@ -186,3 +186,13 @@ OK (0 failures, 0 errors)
 ## 📄 开源许可证
 
 本项目基于 [MIT License](LICENSE) 协议开源。
+
+---
+
+## ⚠️ 免责声明 (Disclaimer)
+
+This project is an independent, unofficial open-source project. It is not affiliated with, endorsed by, or sponsored by Apple Inc.
+
+Apple, iPhone and related trademarks belong to their respective owners.
+
+本项目为独立的非官方开源项目，与 Apple Inc. 无隶属、授权或合作关系。

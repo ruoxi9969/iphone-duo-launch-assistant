@@ -48,3 +48,4 @@ htmlcov/
 # Internal Development Reports & Scratchpad (Preserved locally, excluded from Git)
 private_reports/
 scratch/
+GITHUB_RELEASE_PREPARATION.md
