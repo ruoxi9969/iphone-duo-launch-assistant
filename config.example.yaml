@@ -1,0 +1,67 @@
+# Apple 中国大陆官网购买配置 (V0.4 Launch Day 样例)
+product_url: "https://www.apple.com.cn/shop/buy-iphone/iphone-duo"
+model: "iPhone Duo"
+color: "星光白色"
+storage: "512GB"
+purchase_mode: "delivery" # "delivery" (快递配送) 或 "pickup" (直营店自提)
+
+target:
+  product: "iPhone Duo"
+  color: "星光白色"
+  storage: "512GB"
+  part_number: null # 官方 Part Number 自动解析 (预期 MK2P4CH/A)
+  auto_resolve_part_number: true
+
+online:
+  interval_seconds: 25
+  jitter_seconds: 5
+  min_interval_seconds: 15.0
+  max_consecutive_failures: 5
+
+pickup:
+  enabled: true
+  region: "CN"
+  city: "上海"
+  stores:
+    - name: "香港广场"
+      store_number: "R390"
+    - name: "上海环贸 iapm"
+      store_number: "R401"
+    - name: "五角场"
+      store_number: "R581"
+    - name: "环球港"
+      store_number: "R683"
+  interval_seconds: 30
+  jitter_seconds: 10
+  min_interval_seconds: 20.0
+  store_throttle_seconds: 2.0
+  max_consecutive_failures: 5
+
+browser:
+  headless: false
+  user_data_dir: "./browser_data"
+  viewport:
+    width: 1440
+    height: 900
+  action_delay_min_ms: 300
+  action_delay_max_ms: 800
+  timeout_ms: 30000
+
+safety:
+  stop_at_login: true
+  stop_at_captcha: true
+  stop_at_2fa: true
+  stop_at_checkout_confirmation: true
+  stop_at_payment: true
+
+notifications:
+  feishu:
+    enabled: true
+    webhook_url: "" # 飞书群自定义机器人 Webhook (亦可使用环境变量 FEISHU_WEBHOOK)
+  sound:
+    enabled: true
+
+# 预购开始时间倒计时配置 (Apple 官方确认: 2026-10-16 20:00:00 CST 开始接受预购；2026-10-23 正式发售)
+launch:
+  launch_time: "2026-10-16T20:00:00+08:00"
+

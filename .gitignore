@@ -1,0 +1,50 @@
+# Python & Environments
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.pyo
+*$py.class
+
+# OS & Editor Artifacts
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Configuration & Sensitive Credentials (NEVER commit secrets)
+config.yaml
+.env
+.env.*
+!.env.example
+secrets*
+secret*
+credentials*
+cookies*
+session*
+!config.example.yaml
+
+# Browser Profile Data & Sessions (NEVER upload local user data)
+browser_data/
+browser_data_*/
+.playwright/
+
+# Local Catalog Cache & Internal Runtime State
+cache/
+state/
+
+# Runtime Logs & Screenshots
+logs/
+*.log
+
+# Test & Coverage Artifacts
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+
+# Internal Development Reports & Scratchpad (Preserved locally, excluded from Git)
+private_reports/
+scratch/
