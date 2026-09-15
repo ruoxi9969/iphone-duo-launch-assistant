@@ -62,33 +62,33 @@
 
 ```mermaid
 flowchart TD
-    subgraph AppleStore [Apple 中国官网]
-        BuyPage[官网购买页 /shop/buy-iphone]
-        FulfillmentAPI[直营店自提库存接口]
+    subgraph AppleStore ["Apple 中国官网"]
+        BuyPage["官网购买页 /shop/buy-iphone"]
+        FulfillmentAPI["直营店自提库存接口"]
     end
 
-    subgraph CoreEngine [核心调度与执行引擎]
-        CatalogResolver[Catalog 权威解析器\nsrc/catalog.py]
-        OnlineMonitor[线上主通道监控\n低频带随机抖动轮询]
-        PickupMonitor[自提库存监控\n上海 4 店独立节流 >= 2.0s]
-        EventQueue[(可用性事件队列\nAvailabilityEvent Queue)]
-        Coordinator[启动协调器\nLaunchCoordinator (Single-Flight)]
-        Preservation[规格保持核验\nSelection Preservation]
-        GateCheck[终极一致性硬门禁\nFINAL_TARGET_CHECK]
-        Handoff[浏览器置前与人工接管\nHuman Handoff Point]
+    subgraph CoreEngine ["核心调度与执行引擎"]
+        CatalogResolver["Catalog 权威解析器<br/>src/catalog.py"]
+        OnlineMonitor["线上主通道监控<br/>低频带随机抖动轮询"]
+        PickupMonitor["自提库存监控<br/>上海 4 店独立节流 ≥ 2.0s"]
+        EventQueue[("可用性事件队列<br/>AvailabilityEvent Queue")]
+        Coordinator["启动协调器<br/>LaunchCoordinator (Single-Flight)"]
+        Preservation["规格保持核验<br/>Selection Preservation"]
+        GateCheck["终极一致性硬门禁<br/>FINAL_TARGET_CHECK"]
+        Handoff["浏览器置前与人工接管<br/>Human Handoff Point"]
     end
 
-    subgraph SafetyShield [安全护盾]
-        RateGuard[RateGuard\n频控与 403/429/541 退避]
-        FailClosed[会话 Fail-Closed 熔断]
-        NoAutoPay[零自动支付 / 零凭据存储]
+    subgraph SafetyShield ["安全护盾"]
+        RateGuard["RateGuard<br/>频控与 403/429/541 退避"]
+        FailClosed["会话 Fail-Closed 熔断"]
+        NoAutoPay["零自动支付 / 零凭据存储"]
     end
 
-    subgraph PresentationAndAlerts [表现与通知层]
-        Adapter[DashboardAdapter\n线程安全单向投递]
-        Dashboard[控制中心 GUI\n只读 Observer 观察者]
-        Feishu[飞书卡片异步通知]
-        Audio[macOS 本地音频警报]
+    subgraph PresentationAndAlerts ["表现与通知层"]
+        Adapter["DashboardAdapter<br/>线程安全单向投递"]
+        Dashboard["控制中心 GUI<br/>只读 Observer 观察者"]
+        Feishu["飞书卡片异步通知"]
+        Audio["macOS 本地音频警报"]
     end
 
     BuyPage --> CatalogResolver
