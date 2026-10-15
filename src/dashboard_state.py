@@ -94,6 +94,7 @@ class DashboardState:
     browser_status: str = "已预热"         # "已预热", "未启动", "已启动", "运行中"
     target_prepare_status: str = "已就绪"  # "已就绪", "预选中", "未就绪"
     feishu_status: str = "已连接"          # "已连接", "未配置", "重试中"
+    feishu_required: bool = True
     feishu_masked_token: str = "f1****4f"
     feishu_last_ack_ms: Optional[float] = 552.1
     local_alert_status: str = "正常"       # "正常", "静音", "异常"
@@ -271,7 +272,7 @@ class DashboardState:
             return False
         if not self.purchase_options_prepared:
             return False
-        if self.feishu_status not in ("已连接", "已验证"):
+        if self.feishu_required and self.feishu_status not in ("已连接", "已验证"):
             return False
         if self.local_alert_status != "正常":
             return False
@@ -437,3 +438,4 @@ class DashboardState:
             s.updated_at = datetime.datetime.now().strftime("%H:%M:%S")
             s.is_available = (status == "AVAILABLE")
             s.has_error = (status in ("ERROR", "BACKOFF", "403", "541", "429"))
+

@@ -6,8 +6,8 @@
 
 ## 1. 测试套件总览
 
-- **测试用例总数**: **293 项**
-- **当前执行状态**: **293 / 293 PASS (0 Failures, 0 Errors)**
+- **测试用例总数**: **316 项**
+- **当前执行状态**: **316 / 316 PASS (0 Failures, 0 Errors)**
 - **执行耗时**: 约 10~15 秒（全并发/快速内存模拟）
 
 ---
@@ -32,9 +32,14 @@
 在项目根目录下激活 Python 虚拟环境后执行：
 
 ```bash
-# 运行全量 293 项自动化回归测试
+# 运行全量 316 项自动化回归测试
 .venv/bin/python -m unittest discover -s tests -p "test_*.py"
 
 # 单独运行特定安全模块测试 (例如终极硬门禁与失败注入测试)
 .venv/bin/python -m unittest tests/test_phase2_failure_injection.py
 ```
+
+
+## 首发可靠性回归（2026-10-15）
+
+本次本地验证共 316 项，全部通过，耗时 12.475 秒。新增 `tests/test_launch_reliability.py` 的 23 项覆盖开售时区与时间限制、重复实例、过期目录、真实 Apple 目录包装格式、HTTP 拦截、页面选项保留与人工接管生命周期。

@@ -29,6 +29,7 @@ session*
 browser_data/
 browser_data_*/
 .playwright/
+.playwright-cli/
 
 # Local Catalog Cache & Internal Runtime State
 cache/
@@ -49,3 +50,4 @@ htmlcov/
 private_reports/
 scratch/
 GITHUB_RELEASE_PREPARATION.md
+

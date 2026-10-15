@@ -78,9 +78,13 @@ class DashboardAdapter:
                     st.target_sku = config.target.part_number
             if hasattr(config, "notifications") and config.notifications and hasattr(config.notifications, "feishu"):
                 if config.notifications.feishu:
+                    st.feishu_required = config.notifications.feishu.enabled
                     url = getattr(config.notifications.feishu, "webhook_url", "") or ""
                     st.feishu_masked_token = mask_webhook_url(url)
                     st.feishu_status = "已验证" if getattr(config.notifications.feishu, "verified", False) else "未配置"
+                    if not st.feishu_required:
+                        st.feishu_status = "已关闭（本地声音提醒）"
+                        st.checklist["feishu_async_ready"] = True
             if hasattr(config, "launch") and config.launch and hasattr(config.launch, "launch_time"):
                 st.launch_time_iso = config.launch.launch_time
                 st.update_current_time()
@@ -373,3 +377,4 @@ class DashboardAdapter:
                 break
         gui_state.update_current_time()
         return count
+

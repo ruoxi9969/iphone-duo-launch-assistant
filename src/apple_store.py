@@ -28,6 +28,10 @@ from .logger import setup_logger, log_takeover_alert
 
 logger = setup_logger("apple_store")
 
+
+class PurchaseNotReady(RuntimeError):
+    """The page is not orderable yet and no add-to-bag click was attempted."""
+
 async def is_payment_context(page: Page) -> bool:
     """
     严谨判定当前页面是否真正处于支付选择或订单结算上下文 (PAYMENT_CONTEXT)。
@@ -453,9 +457,10 @@ async def verify_target_sku_consistency(
             product=product,
             color=color,
             storage=storage,
-            expected_part_number=expected_sku
+            expected_part_number=expected_sku,
+            current_page_only=require_catalog,
         )
-        if res.status in (ResolutionStatus.SUCCESS, ResolutionStatus.CATALOG_STALE):
+        if res.status == ResolutionStatus.SUCCESS or (not require_catalog and res.status == ResolutionStatus.CATALOG_STALE):
             if res.product and res.product.part_number == expected_sku:
                 logger.debug(f"[SKU Consistency] Catalog 验证一致: {expected_sku}")
                 return True
@@ -859,6 +864,21 @@ class AppleStoreBuyer:
 
         return True
 
+    async def is_add_to_bag_ready(self) -> bool:
+        for selector in Selectors.ADD_TO_BAG:
+            loc = self.page.locator(selector).first
+            if await loc.count() and await loc.is_visible() and await loc.is_enabled():
+                return True
+        return False
+
+    async def is_official_continue_ready(self) -> bool:
+        # The current Apple configurator has a distinct primary Continue button.
+        # Preserve it for a human rather than pretending it is the old add-to-cart flow.
+        if "apple.com.cn/shop/buy-iphone/iphone-duo" not in self.page.url:
+            return False
+        loc = self.page.locator("button[data-autom='continueButton']").first
+        return bool(await loc.count() and await loc.is_visible() and await loc.is_enabled())
+
     async def add_to_bag(self) -> bool:
         """定位并点击‘添加到购物袋’，保存 02_configuration_selected.png"""
         logger.info("等待商品配置完成，准备加入购物袋...")
@@ -870,7 +890,7 @@ class AppleStoreBuyer:
         add_btn: Optional[Locator] = None
         for sel in Selectors.ADD_TO_BAG:
             loc = self.page.locator(sel).first
-            if await loc.count() > 0:
+            if await loc.count() > 0 and await loc.is_visible() and await loc.is_enabled():
                 add_btn = loc
                 break
 
@@ -884,28 +904,15 @@ class AppleStoreBuyer:
             await add_btn.scroll_into_view_if_needed()
             await self._human_delay()
 
-            try:
-                # 优先常规无 force 点击
-                await add_btn.click(timeout=5000)
-            except Exception:
-                # 遮挡时 force 点击重试
-                logger.debug("添加购物袋按钮常规点击被遮挡，使用 force=True 重试")
-                await add_btn.click(force=True, timeout=5000)
+            # One normal attempt only: an uncertain response must not cause a duplicate click.
+            await add_btn.click(timeout=5000)
 
             logger.info("🛒 已点击‘添加到购物袋’！等待页面处理与响应...")
             await asyncio.sleep(2.5)
             return True
         except Exception as e:
-            logger.warning(f"常规与 force 点击添加到购物袋受阻 ({e})，触发受控 JS dispatchEvent 兜底")
-            await self.save_screenshot("warning_fallback_add_to_bag.png")
-            try:
-                await add_btn.evaluate("el => { el.click(); }")
-                logger.info("🛒 已通过 JS 兜底点击‘添加到购物袋’！等待页面处理与响应...")
-                await asyncio.sleep(2.5)
-                return True
-            except Exception as e2:
-                logger.error(f"点击添加到购物袋失败: {e2}")
-                return False
+            logger.error(f"加车响应不确定，停止自动重试，请人工核对购物袋: {e}")
+            return False
 
     async def proceed_to_bag_and_checkout(self) -> Tuple[bool, str]:
         """
@@ -1077,4 +1084,5 @@ class AppleStoreBuyer:
             label_locator_str=label_sel,
             option_desc=f"存储容量: {storage_name}",
         )
+
 

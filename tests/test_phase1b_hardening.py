@@ -192,6 +192,7 @@ class TestPhase1BSelectionPreservation(unittest.TestCase):
         self.mock_buyer.handle_trade_in = AsyncMock(return_value=True)
         self.mock_buyer.handle_applecare = AsyncMock(return_value=True)
         self.mock_buyer.add_to_bag = AsyncMock(return_value=True)
+        self.mock_buyer.is_add_to_bag_ready = AsyncMock(return_value=True)
         self.mock_buyer.proceed_to_bag_and_checkout = AsyncMock(return_value=(True, "人工接管点到达"))
         self.mock_buyer.fast_select_color = AsyncMock()
         self.mock_buyer.fast_select_storage = AsyncMock()
@@ -227,6 +228,7 @@ class TestPhase1BSelectionPreservation(unittest.TestCase):
         self.mock_buyer.handle_trade_in = AsyncMock(return_value=True)
         self.mock_buyer.handle_applecare = AsyncMock(return_value=True)
         self.mock_buyer.add_to_bag = AsyncMock(return_value=True)
+        self.mock_buyer.is_add_to_bag_ready = AsyncMock(return_value=True)
         self.mock_buyer.proceed_to_bag_and_checkout = AsyncMock(return_value=(True, "人工接管点到达"))
 
         asyncio.run(execute_formal_online_checkout_flow(
@@ -269,6 +271,7 @@ class TestPhase1BFastPathRecovery(unittest.TestCase):
         self.mock_buyer.handle_trade_in = AsyncMock(return_value=True)
         self.mock_buyer.handle_applecare = AsyncMock(return_value=True)
         self.mock_buyer.add_to_bag = AsyncMock(return_value=True)
+        self.mock_buyer.is_add_to_bag_ready = AsyncMock(return_value=True)
         self.mock_buyer.proceed_to_bag_and_checkout = AsyncMock(return_value=(True, "人工接管点到达"))
 
         res = asyncio.run(execute_formal_online_checkout_flow(
@@ -296,6 +299,7 @@ class TestPhase1BFastPathRecovery(unittest.TestCase):
         self.mock_buyer.handle_trade_in = AsyncMock(return_value=True)
         self.mock_buyer.handle_applecare = AsyncMock(return_value=True)
         self.mock_buyer.add_to_bag = AsyncMock(return_value=True)
+        self.mock_buyer.is_add_to_bag_ready = AsyncMock(return_value=True)
         self.mock_buyer.proceed_to_bag_and_checkout = AsyncMock(return_value=(True, "人工接管点到达"))
 
         res = asyncio.run(execute_formal_online_checkout_flow(
@@ -323,6 +327,7 @@ class TestPhase1BFastPathRecovery(unittest.TestCase):
         self.mock_buyer.handle_trade_in = AsyncMock(return_value=True)
         self.mock_buyer.handle_applecare = AsyncMock(return_value=True)
         self.mock_buyer.add_to_bag = AsyncMock(return_value=True)
+        self.mock_buyer.is_add_to_bag_ready = AsyncMock(return_value=True)
         self.mock_buyer.proceed_to_bag_and_checkout = AsyncMock(return_value=(True, "人工接管点到达"))
 
         res = asyncio.run(execute_formal_online_checkout_flow(
@@ -347,6 +352,7 @@ class TestPhase1BFastPathRecovery(unittest.TestCase):
         self.mock_buyer.verify_target_sku_consistency = AsyncMock(side_effect=[True, True])
         self.mock_buyer.fast_select_color = AsyncMock(return_value=True)
         self.mock_buyer.add_to_bag = AsyncMock()
+        self.mock_buyer.is_add_to_bag_ready = AsyncMock(return_value=True)
 
         res = asyncio.run(execute_formal_online_checkout_flow(
             page=self.mock_page,
@@ -369,6 +375,7 @@ class TestPhase1BFastPathRecovery(unittest.TestCase):
         self.mock_buyer.verify_target_sku_consistency = AsyncMock(side_effect=[True, False])
         self.mock_buyer.fast_select_color = AsyncMock(return_value=True)
         self.mock_buyer.add_to_bag = AsyncMock()
+        self.mock_buyer.is_add_to_bag_ready = AsyncMock(return_value=True)
 
         res = asyncio.run(execute_formal_online_checkout_flow(
             page=self.mock_page,
@@ -391,6 +398,7 @@ class TestPhase1BFastPathRecovery(unittest.TestCase):
         self.mock_buyer.verify_target_sku_consistency = AsyncMock(return_value=True)
         self.mock_buyer.open_product_page = AsyncMock(return_value=False)
         self.mock_buyer.add_to_bag = AsyncMock()
+        self.mock_buyer.is_add_to_bag_ready = AsyncMock(return_value=True)
 
         res = asyncio.run(execute_formal_online_checkout_flow(
             page=self.mock_page,
@@ -429,6 +437,7 @@ class TestPhase1BFinalTargetCheck(unittest.TestCase):
         self.mock_buyer.handle_trade_in = AsyncMock(return_value=True)
         self.mock_buyer.handle_applecare = AsyncMock(return_value=True)
         self.mock_buyer.add_to_bag = AsyncMock()
+        self.mock_buyer.is_add_to_bag_ready = AsyncMock(return_value=True)
 
         res = asyncio.run(execute_formal_online_checkout_flow(
             page=self.mock_page,
@@ -451,6 +460,7 @@ class TestPhase1BFinalTargetCheck(unittest.TestCase):
         self.mock_buyer.handle_trade_in = AsyncMock(return_value=True)
         self.mock_buyer.handle_applecare = AsyncMock(return_value=True)
         self.mock_buyer.add_to_bag = AsyncMock()
+        self.mock_buyer.is_add_to_bag_ready = AsyncMock(return_value=True)
 
         res = asyncio.run(execute_formal_online_checkout_flow(
             page=self.mock_page,
@@ -473,6 +483,7 @@ class TestPhase1BFinalTargetCheck(unittest.TestCase):
         self.mock_buyer.handle_trade_in = AsyncMock(return_value=True)
         self.mock_buyer.handle_applecare = AsyncMock(return_value=True)
         self.mock_buyer.add_to_bag = AsyncMock()
+        self.mock_buyer.is_add_to_bag_ready = AsyncMock(return_value=True)
 
         res = asyncio.run(execute_formal_online_checkout_flow(
             page=self.mock_page,
@@ -495,6 +506,7 @@ class TestPhase1BFinalTargetCheck(unittest.TestCase):
         self.mock_buyer.handle_trade_in = AsyncMock(return_value=True)
         self.mock_buyer.handle_applecare = AsyncMock(return_value=True)
         self.mock_buyer.add_to_bag = AsyncMock(return_value=True)
+        self.mock_buyer.is_add_to_bag_ready = AsyncMock(return_value=True)
         self.mock_buyer.proceed_to_bag_and_checkout = AsyncMock(return_value=(True, "到达停机点"))
 
         asyncio.run(execute_formal_online_checkout_flow(
@@ -522,6 +534,7 @@ class TestPhase1BFinalTargetCheck(unittest.TestCase):
         self.mock_buyer.handle_trade_in = AsyncMock(return_value=True)
         self.mock_buyer.handle_applecare = AsyncMock(return_value=True)
         self.mock_buyer.add_to_bag = AsyncMock(return_value=False)
+        self.mock_buyer.is_add_to_bag_ready = AsyncMock(return_value=True)
         self.mock_buyer.proceed_to_bag_and_checkout = AsyncMock()
 
         res = asyncio.run(execute_formal_online_checkout_flow(
@@ -663,3 +676,4 @@ class TestPhase1BArchitectureIsolation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
