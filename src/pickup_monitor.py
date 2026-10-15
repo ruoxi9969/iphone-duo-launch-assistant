@@ -251,9 +251,12 @@ class PickupMonitor:
                 url.searchParams.append("mts.0", "regular");
                 url.searchParams.append("parts.0", partNo);
                 url.searchParams.append("store", storeId);
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 8000);
                 
                 try {
                     const response = await fetch(url.toString(), {
+                        signal: controller.signal,
                         credentials: "same-origin",
                         headers: {
                             "Accept": "application/json, text/javascript, */*; q=0.01",
@@ -265,6 +268,8 @@ class PickupMonitor:
                     return { status, text };
                 } catch (e) {
                     return { status: 0, text: e.toString() };
+                } finally {
+                    clearTimeout(timer);
                 }
             }""", {"storeId": store_number, "partNo": part_number})
 
@@ -474,3 +479,4 @@ class PickupMonitor:
                 
                 logger.info(f"第 {round_idx} 轮查询完成 (耗时 {round_duration:.2f}s)。约 {next_wait:.1f} 秒后进行下一轮查询...\n")
                 await asyncio.sleep(next_wait)
+

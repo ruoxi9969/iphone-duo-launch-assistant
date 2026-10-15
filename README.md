@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.10+"></a>
   <a href="https://playwright.dev/"><img src="https://img.shields.io/badge/Playwright-Automation-2EAD33?style=flat-square&logo=playwright&logoColor=white" alt="Playwright"></a>
-  <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/Tests-293%20Passed-brightgreen?style=flat-square" alt="Tests: 293 Passed"></a>
+  <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/Tests-316%20Passed-brightgreen?style=flat-square" alt="Tests: 316 Passed"></a>
   <a href="docs/SAFETY.md"><img src="https://img.shields.io/badge/Safety-Fail--Closed-red?style=flat-square" alt="Safety: Fail-Closed"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple&logoColor=black" alt="Platform: macOS">
@@ -151,13 +151,13 @@ flowchart TD
 本项目拥有完备的密封式离线自动化测试套件，全面覆盖 Catalog 解析、状态机跃迁、退避护盾、通知去重、GUI 观察者模式以及终极门禁失败注入：
 
 ```bash
-# 执行全量 293 项自动化回归测试
+# 执行全量 316 项自动化回归测试
 .venv/bin/python -m unittest discover -s tests -p "test_*.py"
 ```
 
 当前冻结版本测试报告：
 ```text
-Ran 293 tests in 12.268s
+Ran 316 tests in 12.475s
 
 OK (0 failures, 0 errors)
 ```
@@ -293,3 +293,4 @@ This repository is an independent, personal open-source project developed for te
 
 ### 中文
 本项目为个人技术探索与学习交流的独立开源项目，与 Apple Inc.（苹果公司）及其关联公司不存在任何形式的官方隶属、授权、背书或合作关系。Apple 官方网站为 https://www.apple.com。Apple、iPhone 及相关商标权归 Apple Inc. 所有。本项目仅供个人在符合平台规则的前提下参考使用，作者不对任何购买结果、库存变动或系统可用性做任何形式的明示或暗示保证。
+

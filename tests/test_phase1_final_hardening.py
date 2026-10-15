@@ -208,6 +208,7 @@ class TestPhase1CAsyncNotification(unittest.TestCase):
         mock_buyer.handle_trade_in = AsyncMock(return_value=True)
         mock_buyer.handle_applecare = AsyncMock(return_value=True)
         mock_buyer.add_to_bag = AsyncMock(return_value=True)
+        mock_buyer.is_add_to_bag_ready = AsyncMock(return_value=True)
         mock_buyer.proceed_to_bag_and_checkout = AsyncMock(return_value=(True, "人工接管点到达"))
 
         mock_resolver = MagicMock()
@@ -797,6 +798,7 @@ class TestPhase1BRegressionInPhase1Final(unittest.TestCase):
         self.mock_buyer.handle_trade_in = AsyncMock(return_value=True)
         self.mock_buyer.handle_applecare = AsyncMock(return_value=True)
         self.mock_buyer.add_to_bag = AsyncMock(return_value=True)
+        self.mock_buyer.is_add_to_bag_ready = AsyncMock(return_value=True)
         self.mock_buyer.proceed_to_bag_and_checkout = AsyncMock(return_value=(True, "停机点"))
 
         res = asyncio.run(execute_formal_online_checkout_flow(
@@ -821,6 +823,7 @@ class TestPhase1BRegressionInPhase1Final(unittest.TestCase):
         self.mock_buyer.handle_trade_in = AsyncMock(return_value=True)
         self.mock_buyer.handle_applecare = AsyncMock(return_value=True)
         self.mock_buyer.add_to_bag = AsyncMock(return_value=True)
+        self.mock_buyer.is_add_to_bag_ready = AsyncMock(return_value=True)
         self.mock_buyer.proceed_to_bag_and_checkout = AsyncMock(return_value=(True, "停机点"))
 
         res = asyncio.run(execute_formal_online_checkout_flow(
@@ -843,6 +846,7 @@ class TestPhase1BRegressionInPhase1Final(unittest.TestCase):
         self.mock_buyer.handle_trade_in = AsyncMock(return_value=True)
         self.mock_buyer.handle_applecare = AsyncMock(return_value=True)
         self.mock_buyer.add_to_bag = AsyncMock()
+        self.mock_buyer.is_add_to_bag_ready = AsyncMock(return_value=True)
 
         res = asyncio.run(execute_formal_online_checkout_flow(
             page=self.mock_page,
@@ -1071,4 +1075,5 @@ class TestPhase1IsolationAndArchitecture(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
 

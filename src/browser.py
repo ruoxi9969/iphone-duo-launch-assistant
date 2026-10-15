@@ -45,8 +45,8 @@ class BrowserManager:
         self._context = await self._playwright.chromium.launch_persistent_context(
             user_data_dir=user_data_path,
             headless=self.config.headless,
+            **({"channel": self.config.channel} if self.config.channel else {}),
             viewport={"width": self.config.viewport_width, "height": self.config.viewport_height},
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
             locale="zh-CN",
             timezone_id="Asia/Shanghai",
             args=args,
@@ -170,4 +170,5 @@ async def verify_persistent_session(browser_config: BrowserConfig) -> bool:
             return False
     finally:
         await bm2.close()
+
 

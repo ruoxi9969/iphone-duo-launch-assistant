@@ -215,22 +215,40 @@ class AppleCatalogResolver:
             
             # 提取 window.PRODUCT_SELECTION_BOOTSTRAP (若 no_navigate，在后台通过 fetch 异步获取最新响应)
             if no_navigate:
-                ps_data = await page.evaluate("""async () => {
+                ps_data = await page.evaluate(r"""async () => {
+                    const controller = new AbortController();
+                    const timer = setTimeout(() => controller.abort(), 15000);
                     try {
-                        const resp = await fetch(window.location.href, { cache: "no-store", credentials: "same-origin" });
+                        const resp = await fetch(window.location.href, { cache: "no-store", credentials: "same-origin", signal: controller.signal });
+                        if (!resp.ok) throw new Error(`Catalog HTTP ${resp.status}`);
                         const html = await resp.text();
-                        const match = html.match(/PRODUCT_SELECTION_BOOTSTRAP\\s*=\\s*(\\{.+?\\});/s);
+                        const match = /PRODUCT_SELECTION_BOOTSTRAP\s*=\s*\{\s*["']?productSelectionData["']?\s*:\s*/.exec(html);
                         if (match) {
-                            const parsed = JSON.parse(match[1]);
-                            if (parsed && parsed.productSelectionData) {
-                                return parsed.productSelectionData;
+                            // Apple uses an unquoted outer key around a strict JSON value.
+                            // Scan the nested value without evaluating downloaded JavaScript.
+                            const start = match.index + match[0].length;
+                            let depth = 0, inString = false, escaped = false;
+                            for (let i = start; i < html.length; i++) {
+                                const ch = html[i];
+                                if (inString) {
+                                    if (escaped) escaped = false;
+                                    else if (ch === "\\") escaped = true;
+                                    else if (ch === '"') inString = false;
+                                } else if (ch === '"') {
+                                    inString = true;
+                                } else if (ch === "{") {
+                                    depth++;
+                                } else if (ch === "}" && --depth === 0) {
+                                    const parsed = JSON.parse(html.slice(start, i + 1));
+                                    if (parsed && Array.isArray(parsed.products)) return parsed;
+                                    break;
+                                }
                             }
                         }
-                    } catch (e) {}
-                    if (typeof window.PRODUCT_SELECTION_BOOTSTRAP !== "undefined") {
-                        return window.PRODUCT_SELECTION_BOOTSTRAP.productSelectionData || null;
+                    } finally {
+                        clearTimeout(timer);
                     }
-                    return null;
+                    throw new Error("Fresh catalog missing PRODUCT_SELECTION_BOOTSTRAP");
                 }""")
             else:
                 ps_data = await page.evaluate("""() => {
@@ -258,6 +276,11 @@ class AppleCatalogResolver:
                 logger.warning(f"⚠️ 实时拉取 Catalog 遭遇异常: {e}")
             else:
                 logger.debug(f"no_navigate 提取 Catalog 异常: {e}")
+                # Monitoring must see HTTP failures and must never reuse old page/cache data.
+                raise
+
+        if no_navigate:
+            raise RuntimeError("Fresh catalog has no products")
 
         # 2. 降级读取本地缓存
         logger.info(f"正在尝试从本地缓存读取 {canonical_name} Catalog 兜底数据...")
@@ -277,7 +300,8 @@ class AppleCatalogResolver:
         color: str,
         storage: str,
         expected_part_number: Optional[str] = None,
-        force_refresh: bool = False
+        force_refresh: bool = False,
+        current_page_only: bool = False,
     ) -> ResolutionResult:
         """
         核心解析方法：根据输入的产品名称、颜色、存储容量，动态解析出唯一的官方 Part Number
@@ -285,7 +309,14 @@ class AppleCatalogResolver:
         canonical_name, slug = normalize_product_name(product)
         product_url = f"https://www.apple.com.cn/shop/buy-iphone/{slug}"
 
-        ps_data, is_stale = await self.fetch_product_catalog(page, product, force_refresh)
+        if current_page_only:
+            # Specification checks must not navigate away from selected options.
+            ps_data = await page.evaluate("""() =>
+                window.PRODUCT_SELECTION_BOOTSTRAP?.productSelectionData || null
+            """)
+            is_stale = False
+        else:
+            ps_data, is_stale = await self.fetch_product_catalog(page, product, force_refresh)
         if not ps_data:
             return ResolutionResult(
                 status=ResolutionStatus.PRODUCT_NOT_FOUND,
@@ -597,3 +628,4 @@ class AppleCatalogResolver:
 
         lines.append("\n==================================================\n")
         return "\n".join(lines)
+

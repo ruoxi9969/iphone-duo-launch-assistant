@@ -27,6 +27,7 @@ from .config import load_config, AppConfig, mask_feishu_webhook, mask_credential
 from .browser import BrowserManager, check_apple_login_status, verify_persistent_session
 from .apple_store import (
     AppleStoreBuyer,
+    PurchaseNotReady,
     verify_starwhite_selected,
     verify_512gb_selected,
     verify_target_sku_consistency,
@@ -39,6 +40,7 @@ from .notifier import (
 from .pickup_monitor import PickupMonitor, InventoryStatus
 from .catalog import AppleCatalogResolver, ResolutionStatus, ResolvedProduct, LaunchReadinessState
 from .rate_guard import RateGuard, ErrorBackoffTracker, calculate_cadence_sleep
+from .launch_timing import parse_launch_timestamp, launch_wait_seconds, acquire_launch_lock
 from .logger import setup_logger, log_takeover_alert
 
 logger = setup_logger("main")
@@ -498,8 +500,8 @@ async def evaluate_launch_readiness(page, config: AppConfig, resolver: AppleCata
         blocking_reasons.append("SESSION_NOT_READY: 浏览器会话未处于已登录状态 (请运行 --mode prepare-session 并在浏览器中完成登录)")
 
     # 3. CATALOG & TARGET PRODUCT
-    ps_data, _ = await resolver.fetch_product_catalog(page, "iPhone Duo")
-    if ps_data and len(ps_data.get("products", [])) > 0:
+    ps_data, catalog_stale = await resolver.fetch_product_catalog(page, "iPhone Duo")
+    if ps_data and not catalog_stale and len(ps_data.get("products", [])) > 0:
         reports.append("CATALOG OK")
     else:
         reports.append("CATALOG FAILED")
@@ -509,7 +511,7 @@ async def evaluate_launch_readiness(page, config: AppConfig, resolver: AppleCata
 
     # 4. RESOLVE TARGET SKU & MATCH
     res = await resolver.resolve(page, "iPhone Duo", "星光白色", "512GB", expected_part_number="MK2P4CH/A")
-    if res.product and res.product.part_number == "MK2P4CH/A":
+    if res.status == ResolutionStatus.SUCCESS and res.product and not res.is_stale and res.product.part_number == "MK2P4CH/A":
         reports.append(f"TARGET SKU {res.product.part_number}")
         reports.append("TARGET MATCH OK")
         config.target.part_number = res.product.part_number
@@ -520,25 +522,30 @@ async def evaluate_launch_readiness(page, config: AppConfig, resolver: AppleCata
         blocking_reasons.append(f"TARGET_MATCH_FAILED: 目标规格与官方 Catalog 匹配失败 ({res.error_message})")
 
     # 5. FEISHU WEBHOOK
-    feishu_url = (config.notifications.feishu.webhook_url or "").strip()
-    if not feishu_url:
-        reports.append("FEISHU NOT CONFIGURED (FEISHU_WAITING_FOR_CONFIGURATION)")
-        blocking_reasons.append("FEISHU_NOT_CONFIGURED: 飞书 Webhook 尚未配置 (请设置 FEISHU_WEBHOOK 环境变量或在 config.yaml 填入)")
+    if not config.notifications.feishu.enabled:
+        reports.append("FEISHU DISABLED (使用本地声音提醒)")
+        if not config.notifications.sound.enabled:
+            blocking_reasons.append("ALERT_NOT_CONFIGURED: 请至少启用本地声音或已验证的飞书通知")
     else:
-        is_valid, status_code, reason_desc = verify_feishu_status(feishu_url)
-        curr_fp = mask_fingerprint(compute_webhook_fingerprint(feishu_url))
-        if is_valid and status_code == "FEISHU_END_TO_END_OK":
-            reports.append(f"FEISHU END_TO_END_OK ({config.notifications.feishu.masked_url}, fp:{curr_fp})")
-        elif status_code == "FEISHU_WEBHOOK_CHANGED":
-            reports.append(f"FEISHU WEBHOOK CHANGED ({config.notifications.feishu.masked_url})")
-            reports.append(f"FEISHU NOT VERIFIED END_TO_END")
-            blocking_reasons.append("FEISHU_WEBHOOK_CHANGED: 飞书 Webhook 地址已变更，旧端到端认证已失效 (请重新执行 --mode test-feishu)")
-        elif status_code == "FEISHU_VERIFICATION_STALE":
-            reports.append(f"FEISHU VERIFICATION_STALE ({config.notifications.feishu.masked_url})")
-            blocking_reasons.append("FEISHU_VERIFICATION_STALE: 飞书真机端到端验证已超过 30 天有效期 (请重新执行 --mode test-feishu)")
+        feishu_url = (config.notifications.feishu.webhook_url or "").strip()
+        if not feishu_url:
+            reports.append("FEISHU NOT CONFIGURED (FEISHU_WAITING_FOR_CONFIGURATION)")
+            blocking_reasons.append("FEISHU_NOT_CONFIGURED: 飞书 Webhook 尚未配置 (请设置 FEISHU_WEBHOOK 环境变量或在 config.yaml 填入)")
         else:
-            reports.append(f"FEISHU NOT VERIFIED END_TO_END ({config.notifications.feishu.masked_url})")
-            blocking_reasons.append(f"FEISHU_NOT_VERIFIED_END_TO_END: 飞书 Webhook 已配置但未完成手机真机端到端确认 (请执行 --mode test-feishu 并在手机收到消息后按 y 确认)")
+            is_valid, status_code, reason_desc = verify_feishu_status(feishu_url)
+            curr_fp = mask_fingerprint(compute_webhook_fingerprint(feishu_url))
+            if is_valid and status_code == "FEISHU_END_TO_END_OK":
+                reports.append(f"FEISHU END_TO_END_OK ({config.notifications.feishu.masked_url}, fp:{curr_fp})")
+            elif status_code == "FEISHU_WEBHOOK_CHANGED":
+                reports.append(f"FEISHU WEBHOOK CHANGED ({config.notifications.feishu.masked_url})")
+                reports.append(f"FEISHU NOT VERIFIED END_TO_END")
+                blocking_reasons.append("FEISHU_WEBHOOK_CHANGED: 飞书 Webhook 地址已变更，旧端到端认证已失效 (请重新执行 --mode test-feishu)")
+            elif status_code == "FEISHU_VERIFICATION_STALE":
+                reports.append(f"FEISHU VERIFICATION_STALE ({config.notifications.feishu.masked_url})")
+                blocking_reasons.append("FEISHU_VERIFICATION_STALE: 飞书真机端到端验证已超过 30 天有效期 (请重新执行 --mode test-feishu)")
+            else:
+                reports.append(f"FEISHU NOT VERIFIED END_TO_END ({config.notifications.feishu.masked_url})")
+                blocking_reasons.append(f"FEISHU_NOT_VERIFIED_END_TO_END: 飞书 Webhook 已配置但未完成手机真机端到端确认 (请执行 --mode test-feishu 并在手机收到消息后按 y 确认)")
 
 
     # 6. LOCAL ALERT (辅助诊断项)
@@ -921,6 +928,16 @@ async def execute_formal_online_checkout_flow(
         return True
 
     # 步骤 4: 加入购物袋并推进至结账
+    if not await _safe_buyer_call(buyer, "is_add_to_bag_ready", default=False):
+        if await _safe_buyer_call(buyer, "is_official_continue_ready", default=False):
+            reason = "官方新版购买页的“继续”按钮已就绪，请在保留的浏览器中点按继续，核对订单并完成付款。"
+            log_takeover_alert(logger, reason)
+            if dashboard_adapter and hasattr(dashboard_adapter, "on_human_action_required"):
+                dashboard_adapter.on_human_action_required(reason)
+            notifier.notify_background(event=NotificationEvent.HUMAN_ACTION_REQUIRED,
+                                       title="iPhone Duo 购买页面已就绪", details=reason)
+            return True
+        raise PurchaseNotReady("购买按钮尚未启用，未尝试加车，继续低频等待")
     if await buyer.add_to_bag():
         _, reason = await buyer.proceed_to_bag_and_checkout()
         latency_sec = time.perf_counter() - t0_flow_start
@@ -996,6 +1013,7 @@ class OnlineMonitorTask:
         rate_guard: Optional[RateGuard] = None,
         backoff_tracker: Optional[ErrorBackoffTracker] = None,
         _allow_test_override: bool = False,
+        launch_time: Optional[str] = None,
     ):
         self.page = page
         self.resolver = resolver
@@ -1003,6 +1021,7 @@ class OnlineMonitorTask:
         self.page_lock = page_lock
         self.product_name = product_name
         self.target_part = target_part
+        self.launch_timestamp = parse_launch_timestamp(launch_time)
 
         if not _allow_test_override:
             self.min_interval_sec = max(15.0, float(min_interval_sec))
@@ -1046,6 +1065,14 @@ class OnlineMonitorTask:
             f"最小保护 {self.min_interval_sec:.1f}s, 目标: {self.target_part})..."
         )
         while not stop_event.is_set():
+            # Reserve the final minimum interval so the next request can start at launch.
+            remaining = launch_wait_seconds(self.launch_timestamp)
+            if 0 < remaining <= self.min_interval_sec:
+                try:
+                    await asyncio.wait_for(stop_event.wait(), timeout=remaining)
+                except asyncio.TimeoutError:
+                    pass
+                continue
             # 1. 检查是否正处于错误退避期 (403/429/541/网络退避)，退避期内严禁发送任何请求
             if self.backoff_tracker.is_in_backoff():
                 rem = self.backoff_tracker.remaining_backoff()
@@ -1066,11 +1093,11 @@ class OnlineMonitorTask:
             try:
                 # 仅在瞬时读取阶段获取 page_lock，绝对不长期霸占页面
                 async with self.page_lock:
-                    ps_data, _ = await self.resolver.fetch_product_catalog(
+                    ps_data, is_stale = await self.resolver.fetch_product_catalog(
                         self.page, self.product_name, no_navigate=True
                     )
 
-                if ps_data:
+                if ps_data and not is_stale:
                     self.backoff_tracker.record_success()
                     target_skus = [p for p in ps_data.get("products", []) if p.get("partNumber") == self.target_part]
                     if target_skus:
@@ -1078,8 +1105,10 @@ class OnlineMonitorTask:
                         is_coming_soon = sku_item.get("comingSoon", True)
                         is_get_ready = sku_item.get("getReady", False)
 
-                        if not is_coming_soon or is_get_ready:
-                            state = "PREORDER_READY" if is_get_ready and is_coming_soon else "AVAILABLE"
+                        if is_get_ready and is_coming_soon:
+                            logger.info("[PREORDER_READY] 配置准备已开放，继续等待正式可购状态")
+                        if is_coming_soon is False and not launch_wait_seconds(self.launch_timestamp):
+                            state = "AVAILABLE"
                             logger.info(f"🎉 [OnlineMonitor] 发现目标线上可购状态: {self.target_part} [{state}]！发布事件...")
                             await self.event_queue.put(AvailabilityEvent(
                                 source="online",
@@ -1088,12 +1117,11 @@ class OnlineMonitorTask:
                                 details="Apple 官网线上可购买状态开放",
                             ))
                             # 触发后进入安全等待，绝不在短时间内自旋重发
-                            await self.rate_guard.throttle(stop_event)
                             continue
 
                     logger.debug(f"[OnlineMonitor] 线上检测完成: {self.target_part} 仍为即将发售/无货")
                 else:
-                    self.backoff_tracker.record_network_error("返回空目录数据")
+                    self.backoff_tracker.record_network_error("目录为空或已过期，拒绝据此触发购买")
             except Exception as e:
                 err_str = str(e)
                 if "403" in err_str:
@@ -1112,6 +1140,9 @@ class OnlineMonitorTask:
                 min_interval=self.min_interval_sec,
                 backoff_remaining=self.backoff_tracker.remaining_backoff(),
             )
+            remaining = launch_wait_seconds(self.launch_timestamp)
+            if remaining:
+                sleep_time = min(sleep_time, remaining)
             try:
                 await asyncio.wait_for(stop_event.wait(), timeout=sleep_time)
             except asyncio.TimeoutError:
@@ -1141,9 +1172,11 @@ class PickupMonitorTask:
         rate_guard: Optional[RateGuard] = None,
         backoff_tracker: Optional[ErrorBackoffTracker] = None,
         _allow_test_override: bool = False,
+        launch_time: Optional[str] = None,
     ):
         self.page = page
         self.pickup_monitor = pickup_monitor
+        self.launch_timestamp = parse_launch_timestamp(launch_time)
         self.event_queue = event_queue
         self.page_lock = page_lock
 
@@ -1219,6 +1252,14 @@ class PickupMonitorTask:
             for store in stores:
                 if stop_event.is_set():
                     break
+                remaining = launch_wait_seconds(self.launch_timestamp)
+                if 0 < remaining <= 15.0:
+                    # Leave the shared page lock free for the opening online request.
+                    try:
+                        await asyncio.wait_for(stop_event.wait(), timeout=remaining + 1.0)
+                    except asyncio.TimeoutError:
+                        pass
+                    break
                 try:
                     # 获取短时锁执行单店同源 fetch
                     async with self.page_lock:
@@ -1248,6 +1289,9 @@ class PickupMonitorTask:
                     elif "HTTP 429" in (res.reason or ""):
                         has_edge_block = True
                         edge_status_code = 429
+
+                    if has_edge_block:
+                        break
 
                 except Exception as e:
                     logger.warning(f"⚠️ [PickupMonitor] 查询门店 {store.store_number} 异常: {e}")
@@ -1299,6 +1343,7 @@ class LaunchCoordinator:
         pickup_monitor: PickupMonitor,
         expected_part: str = "MK2P4CH/A",
         dashboard_adapter: Optional[Any] = None,
+        refresh_on_available: bool = False,
     ):
         self.page = page
         self.config = config
@@ -1308,6 +1353,7 @@ class LaunchCoordinator:
         self.pickup_monitor = pickup_monitor
         self.expected_part = expected_part
         self.dashboard_adapter = dashboard_adapter
+        self.refresh_on_available = refresh_on_available
 
         self.page_lock = asyncio.Lock()
         self.event_queue: asyncio.Queue[AvailabilityEvent] = asyncio.Queue()
@@ -1369,6 +1415,9 @@ class LaunchCoordinator:
 
     async def handle_online_event(self, event: AvailabilityEvent) -> bool:
         """处理线上可购事件 (Event Winner 最高优先级自动化通道)"""
+        if event.state != "AVAILABLE" or event.part_number != self.expected_part:
+            logger.info("忽略尚未正式可购或目标不一致的事件")
+            return False
         if self.purchase_flow_started:
             logger.info("⚡ [LaunchCoordinator] 线上购买流程已在进行中，忽略重复可购事件 (Single-Flight Protected)")
             return False
@@ -1378,8 +1427,7 @@ class LaunchCoordinator:
         if self.dashboard_adapter and hasattr(self.dashboard_adapter, "on_online_status"):
             self.dashboard_adapter.on_online_status("AVAILABLE", "可购买")
 
-        # 停止后台监控协程
-        self.stop_event.set()
+        # Hold the page lock during preparation; stop only after a terminal outcome.
 
         event_type = NotificationEvent.PREORDER_READY if event.state == "PREORDER_READY" else NotificationEvent.ONLINE_AVAILABLE
 
@@ -1413,16 +1461,34 @@ class LaunchCoordinator:
 
         # 排他性获取 page_lock 执行正式购买流程 (Selection Preservation + FINAL_TARGET_CHECK)
         async with self.page_lock:
-            flow_ok = await execute_formal_online_checkout_flow(
-                page=self.page,
-                config=self.config,
-                buyer=self.buyer,
-                resolver=self.resolver,
-                notifier=self.notifier,
-                event_type=event_type,
-                expected_part=self.expected_part,
-                dashboard_adapter=self.dashboard_adapter,
-            )
+            if self.refresh_on_available:
+                # The background fetch does not update the purchase page's DOM.
+                try:
+                    response = await self.page.reload(wait_until="domcontentloaded", timeout=25000)
+                    if response is not None and response.status >= 400:
+                        logger.error(f"开售页面刷新失败: HTTP {response.status}，请人工接管")
+                        self.stop_event.set()
+                        return False
+                except Exception as exc:
+                    logger.error(f"开售页面刷新失败，请人工接管: {exc}")
+                    self.stop_event.set()
+                    return False
+            try:
+                flow_ok = await execute_formal_online_checkout_flow(
+                    page=self.page,
+                    config=self.config,
+                    buyer=self.buyer,
+                    resolver=self.resolver,
+                    notifier=self.notifier,
+                    event_type=event_type,
+                    expected_part=self.expected_part,
+                    dashboard_adapter=self.dashboard_adapter,
+                )
+            except PurchaseNotReady as exc:
+                logger.info(str(exc))
+                self.purchase_flow_started = False
+                return False
+        self.stop_event.set()
         return flow_ok
 
     async def run(
@@ -1458,6 +1524,7 @@ class LaunchCoordinator:
             jitter_range=on_jitter,
             min_interval_sec=on_min_int,
             _allow_test_override=_allow_test_override,
+            launch_time=getattr(getattr(self.config, "launch", None), "launch_time", None),
         )
 
         self.pickup_monitor_task = PickupMonitorTask(
@@ -1470,6 +1537,7 @@ class LaunchCoordinator:
             min_interval_sec=pk_min_int,
             store_throttle_sec=pk_throttle,
             _allow_test_override=_allow_test_override,
+            launch_time=getattr(getattr(self.config, "launch", None), "launch_time", None),
         )
 
         # 在后台并发启动监控任务
@@ -1495,8 +1563,11 @@ class LaunchCoordinator:
                     await self.handle_pickup_event(event)
                     # 关键：自提只报警，不中断监控，线上通道继续运行！
                 elif event.source == "online":
+                    if event.state != "AVAILABLE" or event.part_number != self.expected_part:
+                        continue
                     success = await self.handle_online_event(event)
-                    break
+                    if self.purchase_flow_started:
+                        break
 
         finally:
             self.stop_event.set()
@@ -1510,6 +1581,27 @@ class LaunchCoordinator:
                 await self.notifier.drain_pending_notifications(timeout=3.0)
 
         return success
+
+
+async def wait_for_manual_handoff(page: Any):
+    """Keep the official page available until the user closes it."""
+    if page.is_closed():
+        return
+    closed = asyncio.Event()
+    def on_close(*_):
+        closed.set()
+    page.on("close", on_close)
+    try:
+        if page.is_closed():
+            return
+        try:
+            await page.bring_to_front()
+        except Exception:
+            pass
+        logger.info("【人工接管】浏览器会一直保留，请核对商品并完成付款；关闭浏览器后程序退出。")
+        await closed.wait()
+    finally:
+        page.remove_listener("close", on_close)
 
 
 async def run_launch_mode(
@@ -1531,6 +1623,7 @@ async def run_launch_mode(
     8. FINAL_TARGET_CHECK 终极门禁核验后加车，推进至安全停机点等待人工接管
     """
     logger.info("==================================================")
+    parse_launch_timestamp(config.launch.launch_time)
     logger.info("  【Launch Day 首发实战协同模式】iPhone Duo")
     logger.info("==================================================")
 
@@ -1656,6 +1749,7 @@ async def run_launch_mode(
             pickup_monitor=pickup_monitor,
             expected_part=expected_part,
             dashboard_adapter=dashboard_adapter,
+            refresh_on_available=True,
         )
 
         o_cfg = getattr(config, "online", None)
@@ -1676,11 +1770,21 @@ async def run_launch_mode(
         if dashboard_adapter and hasattr(dashboard_adapter, "on_stage_changed"):
             dashboard_adapter.on_stage_changed("monitor", "库存监控中")
 
-        await coordinator.run(
-            online_interval=o_interval,
-            pickup_interval=p_interval,
-            max_rounds=max_rounds,
-        )
+        try:
+            await coordinator.run(
+                online_interval=o_interval,
+                pickup_interval=p_interval,
+                max_rounds=max_rounds,
+            )
+        except Exception as exc:
+            if not coordinator.purchase_flow_started:
+                raise
+            logger.error(f"购买推进出现异常，保留页面等待人工接管: {exc}")
+            notifier.notify_background(event=NotificationEvent.HUMAN_ACTION_REQUIRED,
+                                       title="购买流程需要人工接管", details=str(exc))
+        finally:
+            if coordinator.purchase_flow_started:
+                await wait_for_manual_handoff(page)
 
     except KeyboardInterrupt:
         logger.info("收到用户中断信号，首发监控退出。")
@@ -2045,6 +2149,12 @@ def main():
         cfg_file = "config.example.yaml"
 
     config = load_config(cfg_file)
+    launch_lock = None
+    if args.mode in ("launch", "launch-dashboard"):
+        try:
+            launch_lock = acquire_launch_lock()
+        except RuntimeError as exc:
+            parser.exit(2, str(exc) + "\n")
 
     # 命令行参数覆盖配置
     if args.product:
@@ -2180,4 +2290,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

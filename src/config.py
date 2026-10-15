@@ -59,6 +59,7 @@ def mask_credential(url: str) -> str:
 @dataclass
 class BrowserConfig:
     headless: bool = False
+    channel: Optional[str] = None
     user_data_dir: str = "./browser_data"
     viewport_width: int = 1440
     viewport_height: int = 900
@@ -274,6 +275,7 @@ def load_config(config_path: str = "config.yaml") -> AppConfig:
     vp_raw = browser_raw.get("viewport", {})
     browser_cfg = BrowserConfig(
         headless=browser_raw.get("headless", False),
+        channel=browser_raw.get("channel"),
         user_data_dir=browser_raw.get("user_data_dir", "./browser_data"),
         viewport_width=vp_raw.get("width", 1440),
         viewport_height=vp_raw.get("height", 900),
@@ -359,3 +361,4 @@ def load_config(config_path: str = "config.yaml") -> AppConfig:
         notifications=notif_cfg,
         launch=launch_cfg,
     )
+
