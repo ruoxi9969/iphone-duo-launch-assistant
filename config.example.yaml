@@ -47,6 +47,11 @@ browser:
   action_delay_max_ms: 800
   timeout_ms: 30000
 
+checkout:
+  auto_continue: false  # 仅在确认目标/预算后启用；普通步骤自动推进，最终提交/协议仍需本人
+  preferred_payment: wechatpay
+  max_total_cny: 17999
+
 safety:
   stop_at_login: true
   stop_at_captcha: true
@@ -64,4 +69,5 @@ notifications:
 # 预购开始时间倒计时配置 (Apple 官方确认: 2026-10-16 20:00:00 CST 开始接受预购；2026-10-23 正式发售)
 launch:
   launch_time: "2026-10-16T20:00:00+08:00"
+
 

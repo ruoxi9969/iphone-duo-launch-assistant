@@ -41,6 +41,7 @@ from .pickup_monitor import PickupMonitor, InventoryStatus
 from .catalog import AppleCatalogResolver, ResolutionStatus, ResolvedProduct, LaunchReadinessState
 from .rate_guard import RateGuard, ErrorBackoffTracker, calculate_cadence_sleep
 from .launch_timing import parse_launch_timestamp, launch_wait_seconds, acquire_launch_lock
+from .checkout import wait_for_storefront, advance_checkout
 from .logger import setup_logger, log_takeover_alert
 
 logger = setup_logger("main")
@@ -468,7 +469,7 @@ async def run_prepare_session(config: AppConfig):
         return False
 
 
-async def evaluate_launch_readiness(page, config: AppConfig, resolver: AppleCatalogResolver, notifier: Notifier):
+async def evaluate_launch_readiness(page, config: AppConfig, resolver: AppleCatalogResolver, notifier: Notifier, fast_launch=False):
     """
     核验 7 大 Hard Requirements：
     1. APPLE_SITE == OK
@@ -485,7 +486,8 @@ async def evaluate_launch_readiness(page, config: AppConfig, resolver: AppleCata
 
     # 1. APPLE SITE
     try:
-        await page.goto("https://www.apple.com.cn", wait_until="domcontentloaded", timeout=15000)
+        if not fast_launch:
+            await page.goto("https://www.apple.com.cn", wait_until="domcontentloaded", timeout=15000)
         reports.append("APPLE SITE OK")
     except Exception as e:
         reports.append(f"APPLE SITE FAILED: {e}")
@@ -510,7 +512,8 @@ async def evaluate_launch_readiness(page, config: AppConfig, resolver: AppleCata
     reports.append("TARGET PRODUCT iPhone Duo")
 
     # 4. RESOLVE TARGET SKU & MATCH
-    res = await resolver.resolve(page, "iPhone Duo", "星光白色", "512GB", expected_part_number="MK2P4CH/A")
+    resolve_options = {"current_page_only": True} if fast_launch else {}
+    res = await resolver.resolve(page, "iPhone Duo", "星光白色", "512GB", expected_part_number="MK2P4CH/A", **resolve_options)
     if res.status == ResolutionStatus.SUCCESS and res.product and not res.is_stale and res.product.part_number == "MK2P4CH/A":
         reports.append(f"TARGET SKU {res.product.part_number}")
         reports.append("TARGET MATCH OK")
@@ -558,8 +561,10 @@ async def evaluate_launch_readiness(page, config: AppConfig, resolver: AppleCata
     # 7. PICKUP ENGINE (上海四家直营店)
     pickup_monitor = PickupMonitor(config, notifier)
     try:
-        pickup_res = await pickup_monitor.run_single_round(page)
-        if pickup_res and len(pickup_res) == 4:
+        pickup_res = None if fast_launch else await pickup_monitor.run_single_round(page)
+        if fast_launch:
+            reports.append("PICKUP ENGINE DEFERRED (配送优先，自提后台检查)")
+        elif pickup_res and len(pickup_res) == 4:
             reports.append("PICKUP ENGINE OK")
         else:
             reports.append("PICKUP ENGINE PARTIAL")
@@ -570,7 +575,8 @@ async def evaluate_launch_readiness(page, config: AppConfig, resolver: AppleCata
 
     # 8. ONLINE ENGINE
     try:
-        await page.goto("https://www.apple.com.cn/shop/buy-iphone/iphone-duo", wait_until="domcontentloaded", timeout=15000)
+        if not fast_launch:
+            await page.goto("https://www.apple.com.cn/shop/buy-iphone/iphone-duo", wait_until="domcontentloaded", timeout=15000)
         reports.append("ONLINE ENGINE OK")
     except Exception as e:
         reports.append(f"ONLINE ENGINE FAILED: {e}")
@@ -695,7 +701,8 @@ async def execute_formal_target_prepare(
         dashboard_adapter.on_target_preparing()
 
     # 1. 打开真实 iPhone Duo 购买页
-    if not await buyer.open_product_page():
+    reuse_page = config.checkout.auto_continue and "buy-iphone/iphone-duo" in str(getattr(page, "url", "")) and bool(await page.locator("input[name='dimensionColor']").count())
+    if not reuse_page and not await buyer.open_product_page():
         logger.critical("🛑 [FORMAL_TARGET_PREPARE_FAILED] 无法打开目标商品购买页，启动阻断！")
         print("\n" + "=" * 65)
         print("  【首发目标预热失败：FORMAL_TARGET_PREPARE_FAILED】")
@@ -928,6 +935,22 @@ async def execute_formal_online_checkout_flow(
         return True
 
     # 步骤 4: 加入购物袋并推进至结账
+    if config.checkout.auto_continue:
+        use_continue = await _safe_buyer_call(buyer, "is_official_continue_ready", default=False)
+        use_add = await _safe_buyer_call(buyer, "is_add_to_bag_ready", default=False)
+        if not (use_continue or use_add):
+            raise PurchaseNotReady("购买按钮尚未启用，未尝试购买，继续低频等待")
+        _, reason = await advance_checkout(buyer, initial_continue=use_continue)
+        latency_sec = time.perf_counter() - t0_flow_start
+        logger.info("[LATENCY_MEASURED] 触发至人工接管点耗时: %.3f 秒", latency_sec)
+        log_takeover_alert(logger, reason)
+        if dashboard_adapter and hasattr(dashboard_adapter, "on_latency_recorded"):
+            dashboard_adapter.on_latency_recorded(latency_sec)
+        if dashboard_adapter and hasattr(dashboard_adapter, "on_human_action_required"):
+            dashboard_adapter.on_human_action_required(reason)
+        notifier.notify_background(event=NotificationEvent.HUMAN_ACTION_REQUIRED,
+                                   title="请接管 Apple 结账", details=reason)
+        return True
     if not await _safe_buyer_call(buyer, "is_add_to_bag_ready", default=False):
         if await _safe_buyer_call(buyer, "is_official_continue_ready", default=False):
             reason = "官方新版购买页的“继续”按钮已就绪，请在保留的浏览器中点按继续，核对订单并完成付款。"
@@ -1650,7 +1673,10 @@ async def run_launch_mode(
         logger.info("正在执行首发启动前硬性就绪条件全检 (Hard Requirements)...")
         if dashboard_adapter and hasattr(dashboard_adapter, "on_session_checking"):
             dashboard_adapter.on_session_checking()
-        is_ready, reports, blocking_reasons = await evaluate_launch_readiness(page, config, resolver, notifier)
+        if config.checkout.auto_continue:
+            await wait_for_storefront(page, config, dashboard_adapter)
+        readiness_options = {"fast_launch": True} if config.checkout.auto_continue else {}
+        is_ready, reports, blocking_reasons = await evaluate_launch_readiness(page, config, resolver, notifier, **readiness_options)
         if not is_ready:
             logger.critical("🛑 [LAUNCH_BLOCKED_SESSION] 首发监控启动失败：存在未满足的硬性就绪条件！")
             reason_str = "; ".join(blocking_reasons)
@@ -1676,7 +1702,8 @@ async def run_launch_mode(
         logger.info("正在执行首发前 Catalog 实时校验与 SKU 锁定...")
         if dashboard_adapter and hasattr(dashboard_adapter, "on_catalog_checking"):
             dashboard_adapter.on_catalog_checking()
-        res = await resolver.resolve(page, target_prod, target_col, target_stor, expected_part_number=expected_part)
+        resolve_options = {"current_page_only": True} if config.checkout.auto_continue else {}
+        res = await resolver.resolve(page, target_prod, target_col, target_stor, expected_part_number=expected_part, **resolve_options)
         if res.status == ResolutionStatus.TARGET_CHANGED:
             logger.critical(f"🚨 启动阻断：{res.error_message}")
             if hasattr(notifier, "notify_background"):
@@ -1738,7 +1765,8 @@ async def run_launch_mode(
 
         # 第四阶段：自提通道就绪与双通道解耦监控协调器 (Phase 1D Architecture)
         pickup_monitor = PickupMonitor(config, notifier)
-        await pickup_monitor.ensure_session(page)
+        if not config.checkout.auto_continue:
+            await pickup_monitor.ensure_session(page)
 
         coordinator = LaunchCoordinator(
             page=page,
@@ -1788,6 +1816,11 @@ async def run_launch_mode(
 
     except KeyboardInterrupt:
         logger.info("收到用户中断信号，首发监控退出。")
+    except Exception as exc:
+        logger.error("[LAUNCH_MANUAL_HANDOFF] 启动或页面识别异常，保留窗口: %s", exc)
+        notifier.notify_background(event=NotificationEvent.HUMAN_ACTION_REQUIRED,
+                                   title="Apple 页面需要人工检查", details=str(exc))
+        await wait_for_manual_handoff(page)
     finally:
         if hasattr(notifier, "drain_pending_notifications"):
             try:

@@ -76,6 +76,12 @@ class SafetyConfig:
     stop_at_payment: bool = True
 
 @dataclass
+class CheckoutConfig:
+    auto_continue: bool = False
+    preferred_payment: str = "wechatpay"
+    max_total_cny: float = 17999.0
+
+@dataclass
 class FeishuConfig:
     enabled: bool = True
     webhook_url: str = ""
@@ -185,6 +191,7 @@ class AppConfig:
     safety: SafetyConfig = field(default_factory=SafetyConfig)
     notifications: NotificationConfig = field(default_factory=NotificationConfig)
     launch: LaunchConfig = field(default_factory=LaunchConfig)
+    checkout: CheckoutConfig = field(default_factory=CheckoutConfig)
 
 
 def load_config(config_path: str = "config.yaml") -> AppConfig:
@@ -340,6 +347,14 @@ def load_config(config_path: str = "config.yaml") -> AppConfig:
     launch_raw = raw_data.get("launch", {})
     launch_time_val = launch_raw.get("launch_time") if isinstance(launch_raw, dict) else None
     launch_cfg = LaunchConfig(launch_time=launch_time_val)
+    checkout_raw = raw_data.get("checkout", {})
+    checkout_cfg = CheckoutConfig(
+        auto_continue=checkout_raw.get("auto_continue", False) is True,
+        preferred_payment=checkout_raw.get("preferred_payment", "wechatpay"),
+        max_total_cny=float(checkout_raw.get("max_total_cny", 17999.0)),
+    )
+    if not 0 < checkout_cfg.max_total_cny <= 17999:
+        raise ValueError("checkout.max_total_cny 必须大于 0 且不超过 17999")
 
     # 动态推断 product_url (若未显式指定)
     default_product_url = raw_data.get("product_url", "")
@@ -360,5 +375,6 @@ def load_config(config_path: str = "config.yaml") -> AppConfig:
         safety=safety_cfg,
         notifications=notif_cfg,
         launch=launch_cfg,
+        checkout=checkout_cfg,
     )
 

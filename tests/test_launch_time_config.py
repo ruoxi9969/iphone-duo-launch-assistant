@@ -18,7 +18,7 @@ Covers:
 import os
 import unittest
 import datetime
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock, AsyncMock, patch
 
 from src.config import load_config, AppConfig
 from src.dashboard_state import DashboardState
@@ -148,7 +148,11 @@ class TestLaunchTimeConfig(unittest.TestCase):
     # 7. 适配器 Adapter 从 AppConfig 读取 launch_time
     def test_adapter_init_from_config(self):
         adapter = DashboardAdapter()
-        adapter.init_from_config(self.cfg)
+        update = DashboardState.update_current_time
+        fixed = datetime.datetime.fromisoformat("2026-10-14T12:00:00+08:00")
+        with patch.object(DashboardState, "update_current_time", autospec=True,
+                          side_effect=lambda state: update(state, now=fixed)):
+            adapter.init_from_config(self.cfg)
         st = adapter.get_latest_state()
         self.assertEqual(st.launch_time_iso, "2026-10-16T20:00:00+08:00")
         self.assertIn("距离预购", st.launch_countdown_str)
@@ -202,3 +206,4 @@ class TestLaunchTimeConfig(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
