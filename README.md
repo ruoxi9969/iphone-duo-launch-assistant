@@ -1,5 +1,13 @@
 # iPhone Duo Launch Assistant
 
+## 2026-10-16 结账推进优化
+
+可通过 `checkout.auto_continue: true` 启用正常点击自动推进；默认关闭。商店显示“来得早，来得好”维护页时保持等待，在配置的开售时间重新访问；恢复后仍须完成实时目录、目标和登录核验。配送优先流程不再等待四店自提诊断，重复导航和动作延迟也已缩减。
+
+自动流程仅点击已识别的“继续”、购物袋结账和已保存配送步骤，购物袋必须可核实为目标机型一台且总价不超过 `checkout.max_total_cny`（最高 17,999 元）。可识别 `wechatpay` 单选框时预选微信。按钮响应不确定不会再次点击；页面不明、身份验证、缺少必填信息、销售协议和最终提交均停下等待本人。**不承诺无人操作直达二维码；扫码前可能仍需本人提交订单。** 不自动接受条款或提交订单。
+
+验证：332 项离线测试通过，包括虚构网页的完整普通结账路径、微信预选、超预算/多商品/数量不符拦截、维护等待、重复加车保护。开售前官网处于维护中，尚未验证恢复后的完整真实结账路径。
+
 > **A safety-first, event-driven Apple China launch monitoring and purchase-assistance system with dynamic catalog verification, dual-channel availability tracking, and a native desktop dashboard.**
 >
 > **面向 Apple 中国官网新品首发场景的低频合规、规格强校验、全流程人工接管的桌面协同辅助系统。**
@@ -7,7 +15,7 @@
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.10+"></a>
   <a href="https://playwright.dev/"><img src="https://img.shields.io/badge/Playwright-Automation-2EAD33?style=flat-square&logo=playwright&logoColor=white" alt="Playwright"></a>
-  <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/Tests-316%20Passed-brightgreen?style=flat-square" alt="Tests: 316 Passed"></a>
+  <a href="docs/TESTING.md"><img src="https://img.shields.io/badge/Tests-332%20Passed-brightgreen?style=flat-square" alt="Tests: 332 Passed"></a>
   <a href="docs/SAFETY.md"><img src="https://img.shields.io/badge/Safety-Fail--Closed-red?style=flat-square" alt="Safety: Fail-Closed"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/Platform-macOS-lightgrey?style=flat-square&logo=apple&logoColor=black" alt="Platform: macOS">
